@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎛️ Custom Audio Visualizer</title>
+    <link rel="icon" type="image/png" href="/iconaudio.png">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    
+    <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
+
+    <style>
+        /* Base / Dark Theme */
+        :root {
+            --bg-color: #121212; --card-bg-color: #1a1a1a; --border-color: #333; --border-width: 1px; 
+            --main-accent: #00e0ff; --main-gradient: linear-gradient(135deg, #00e0ff 0%, #a855f7 100%);
+            --text-color: #ffffff; --secondary-text-color: #aaaaaa;
+            --success-color: #4CAF50; --success-bg: #1e291e;
+            --drop-bg: #0d0d0d; --tile-bg: #222; --tile-selected-bg: #1e262b;
+            --text-outline-color: #004d5e; 
+        }
+
+        /* High Contrast Theme */
+        html[data-theme="high-contrast"] {
+            --bg-color: #000000; --card-bg-color: #000000; --border-color: #ffffff;
+            --main-accent: #ffff00; --main-gradient: linear-gradient(135deg, #ffff00 0%, #ffff00 100%);
+            --text-color: #ffffff; --secondary-text-color: #dddddd;
+            --success-color: #00ff00; --success-bg: #000000;
+            --drop-bg: #000000; --tile-bg: #000000; --tile-selected-bg: #333333; --text-outline-color: #666600; 
+        }
+
+        /* Light Theme */
+        html[data-theme="light"] {
+            --bg-color: #f5f7fa; --card-bg-color: #ffffff; --border-color: #e4e7eb;
+            --main-accent: #0070f3; --main-gradient: linear-gradient(135deg, #0070f3 0%, #7928ca 100%);
+            --text-color: #000000; --secondary-text-color: #555555;
+            --drop-bg: #f9fafb; --tile-bg: #f3f4f6; --tile-selected-bg: #eff6ff; --text-outline-color: #002b6b; 
+        }
+
+        /* Orange Dark Theme */
+        html[data-theme="orange-dark"] {
+            --bg-color: #1a1614; --card-bg-color: #241e1b; --border-color: #3d2f28;
+            --main-accent: #ff8a00; --main-gradient: linear-gradient(135deg, #ff8a00 0%, #e52e71 100%);
+            --text-color: #ffffff; --secondary-text-color: #aaaaaa;
+            --drop-bg: #14100e; --tile-bg: #2d2420; --tile-selected-bg: #3b281d; --text-outline-color: #663600; 
+        }
+
+        /* Orange Light Theme */
+        html[data-theme="orange-light"] {
+            --bg-color: #fff9f5; --card-bg-color: #ffffff; --border-color: #ffe0cc;
+            --main-accent: #e65c00; --main-gradient: linear-gradient(135deg, #ff8a00 0%, #e65c00 100%);
+            --text-color: #000000; --secondary-text-color: #555555;
+            --drop-bg: #fff0e5; --tile-bg: #ffecd9; --tile-selected-bg: #ffe6d0; --text-outline-color: #662800; 
+        }
+
+        /* Green Dark Theme */
+        html[data-theme="green-dark"] {
+            --bg-color: #0f1712; --card-bg-color: #16221a; --border-color: #24382b;
+            --main-accent: #10b981; --main-gradient: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            --text-color: #ffffff; --secondary-text-color: #aaaaaa;
+            --drop-bg: #0a0f0c; --tile-bg: #1c2b21; --tile-selected-bg: #1a3826; --text-outline-color: #064e3b; 
+        }
+
+        /* Green Light Theme */
+        html[data-theme="green-light"] {
+            --bg-color: #f0fdf4; --card-bg-color: #ffffff; --border-color: #bbf7d0;
+            --main-accent: #059669; --main-gradient: linear-gradient(135deg, #34d399 0%, #059669 100%);
+            --text-color: #000000; --secondary-text-color: #555555;
+            --drop-bg: #ecfdf5; --tile-bg: #d1fae5; --tile-selected-bg: #a7f3d0; --text-outline-color: #022c1e; 
+        }
+
+        /* Pastel Theme */
+        html[data-theme="pastel"] {
+            --bg-color: #fdf2f8; --card-bg-color: #ffffff; --border-color: #fbcfe8;
+            --main-accent: #ec4899; --main-gradient: linear-gradient(135deg, #f472b6 0%, #c084fc 100%);
+            --text-color: #000000; --secondary-text-color: #555555;
+            --drop-bg: #fce7f3; --tile-bg: #fdf2f8; --tile-selected-bg: #fbcfe8; --text-outline-color: #751a46; 
+        }
+
+        /* Text Stroke Logic */
+        body.text-stroke-active p, body.text-stroke-active h2, body.text-stroke-active h3, body.text-stroke-active h4, 
+        body.text-stroke-active span, body.text-stroke-active label, body.text-stroke-active li, body.text-stroke-active button {
+            text-shadow: 
+                0.06em 0.06em 0 var(--text-outline-color), -0.06em 0.06em 0 var(--text-outline-color),
+                0.06em -0.06em 0 var(--text-outline-color), -0.06em -0.06em 0 var(--text-outline-color),
+                0 0.06em 0 var(--text-outline-color), 0 -0.06em 0 var(--text-outline-color),
+                0.06em 0 0 var(--text-outline-color), -0.06em 0 0 var(--text-outline-color);
+        }
+
+        body {
+            font-family: 'Inter', sans-serif; background-color: var(--bg-color); color: var(--text-color);
+            padding: 20px; display: flex; justify-content: center; min-height: 100vh; margin: 0; transition: background-color 0.3s, color 0.3s;
+        }
+
+        .container { width: 100%; max-width: 600px; display: flex; flex-direction: column; gap: 20px; position: relative; }
+
+        .top-bar { display: flex; justify-content: space-between; align-items: flex-start; position: relative; }
+        header h2 { margin: 0; color: var(--main-accent); font-size: 24px; font-weight: 600; display: flex; align-items: center; gap: 10px;}
+        header h2 img { width: 28px; height: 28px; border-radius: 6px; }
+        header p { margin: 5px 0; color: var(--secondary-text-color); font-size: 14px; }
+
+        .menu-wrapper { position: relative; }
+        #menuBtn { background: none; border: none; color: var(--text-color); font-size: 24px; cursor: pointer; padding: 5px; border-radius: 4px; }
+        #menuBtn:hover { background: var(--card-bg-color); }
+
+        .dropdown {
+            position: absolute; top: 100%; right: 0; background: var(--card-bg-color); color: var(--text-color);
+            border: var(--border-width) solid var(--border-color); border-radius: 8px; width: 240px; box-shadow: 0 4px 12px rgba(0,0,0,0.4); 
+            z-index: 100; display: none; flex-direction: column; overflow: hidden;
+        }
+        .dropdown.show { display: flex; }
+        .dropdown-header { padding: 10px 15px; font-size: 12px; font-weight: 600; color: var(--secondary-text-color); background: var(--drop-bg); text-transform: uppercase; }
+        .dropdown-divider { height: 1px; background-color: var(--border-color); }
+
+        .theme-btn { background: none; border: none; padding: 12px 15px; text-align: left; color: var(--text-color); cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 10px; border-left: 3px solid transparent; }
+        .theme-color-dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; flex-shrink: 0; border: 1px solid transparent; }
+        .theme-btn:hover { background: var(--tile-bg); }
+        .theme-btn.active { background: var(--tile-selected-bg); color: var(--text-color); font-weight: 600; border-left: 3px solid var(--main-accent); }
+        .theme-btn.active .theme-color-dot { border: 2px solid var(--text-color); }
+
+        .toggle-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; cursor: pointer; color: var(--text-color); font-size: 14px; }
+        .toggle-row:hover { background: var(--tile-bg); }
+        .toggle-row input { cursor: pointer; width: 16px; height: 16px; margin: 0; }
+
+        form { display: flex; flex-direction: column; gap: 20px; }
+        .card { background-color: var(--card-bg-color); border: var(--border-width) solid var(--border-color); border-radius: 8px; padding: 20px; transition: border-color 0.3s, background-color 0.3s; }
+
+        #drop-area { border: 2px dashed var(--border-color); border-radius: 8px; padding: 30px; text-align: center; cursor: pointer; transition: border-color 0.3s; background-color: var(--drop-bg); }
+        #drop-area.hover { border-color: var(--main-accent); }
+        #drop-area .icon { font-size: 40px; margin-bottom: 15px; }
+        #drop-area p { margin: 0; color: var(--secondary-text-color); font-size: 14px; }
+        #drop-area p strong { color: var(--text-color); }
+        #file-input { display: none; }
+        #file-status { margin-top: 15px; font-size: 13px; color: var(--main-accent); display: none; }
+
+        .section-label { color: var(--secondary-text-color); text-transform: uppercase; font-size: 12px; font-weight: 600; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;}
+
+        /* Styles Selection UI */
+        .style-options { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .style-tile { background-color: var(--tile-bg); border: var(--border-width) solid var(--border-color); border-radius: 6px; padding: 15px; text-align: center; cursor: pointer; transition: all 0.3s ease; }
+        
+        .style-tile svg { width: 60px; height: 40px; margin-bottom: 10px; stroke: var(--secondary-text-color); fill: none; transition: all 0.3s ease; }
+        .style-tile svg.fill-svg { fill: var(--secondary-text-color); stroke: none; }
+        
+        .style-tile p { margin: 0; font-size: 14px; color: var(--secondary-text-color); }
+        .style-tile:hover { border-color: var(--text-color); }
+        .style-tile.selected { border-color: var(--main-accent); background-color: var(--tile-selected-bg); }
+        .style-tile.selected p { color: var(--text-color); font-weight: 600; }
+        .style-tile.selected svg { stroke: var(--text-color); }
+        .style-tile.selected svg.fill-svg { fill: var(--text-color); stroke: none; }
+
+        #current-style-display { margin-top: 10px; }
+        #current-style-display:hover { background-color: var(--tile-bg); }
+
+        .more-styles-btn { background: none; border: 1px solid var(--secondary-text-color); color: var(--text-color); padding: 6px 12px; border-radius: 4px; font-size: 12px; cursor: pointer; text-transform: uppercase; font-weight: 600; transition: all 0.2s; }
+        .more-styles-btn:hover { background: var(--tile-bg); border-color: var(--text-color); }
+
+        /* Controls & Advanced Settings */
+        .color-inputs { display: flex; gap: 15px; }
+        .color-wrapper { flex: 1; display: flex; align-items: center; background-color: var(--tile-bg); border: var(--border-width) solid var(--border-color); border-radius: 6px; padding: 10px 15px; cursor: pointer; transition: border-color 0.2s; }
+        .color-wrapper:hover { border-color: var(--text-color); }
+        .color-wrapper input[type="color"] { -webkit-appearance: none; border: none; width: 20px; height: 20px; padding: 0; background: transparent; cursor: pointer; margin-right: 12px; }
+        .color-wrapper input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+        .color-wrapper input[type="color"]::-webkit-color-swatch { border: 1px solid #555; border-radius: 2px; }
+        
+        .hex-code { color: var(--text-color); font-family: monospace; font-size: 14px; flex-grow: 1; outline: none; border-bottom: 1px dashed transparent; transition: border 0.2s;}
+        .hex-code:focus { border-bottom: 1px dashed var(--main-accent); }
+        
+        .color-label { color: var(--secondary-text-color); font-size: 12px; }
+
+        .slider-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px; }
+        .control-group { display: flex; flex-direction: column; gap: 5px; }
+        .control-group label { font-size: 12px; color: var(--secondary-text-color); display: flex; justify-content: space-between;}
+        .control-group input[type="range"] { width: 100%; accent-color: var(--main-accent); }
+        .control-group select, .control-group input[type="file"], .control-group input[type="number"] { width: 100%; padding: 8px; background: var(--tile-bg); border: 1px solid var(--border-color); color: var(--text-color); border-radius: 4px; font-size: 13px; outline: none; }
+        .control-group input[type="number"]:focus { border-color: var(--main-accent); }
+
+        .primary-btn { background: var(--main-gradient); color: #fff; border: none; border-radius: 6px; padding: 14px; font-size: 16px; font-weight: 600; cursor: pointer; width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; transition: opacity 0.3s; }
+        .primary-btn:hover { opacity: 0.9; }
+        .primary-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        /* Modals */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.85); display: none; justify-content: center; align-items: center; z-index: 200; }
+        .modal-overlay.show { display: flex; }
+        .modal-content { background: var(--bg-color); border: var(--border-width) solid var(--border-color); border-radius: 8px; padding: 25px; width: 90%; max-width: 500px; position: relative; box-shadow: 0 10px 30px rgba(0,0,0,0.5); max-height: 85vh; overflow-y: auto; }
+        .modal-overlay.show { display: flex; }
+        .modal-content { background: var(--bg-color); border: var(--border-width) solid var(--border-color); border-radius: 8px; padding: 25px; width: 90%; max-width: 500px; position: relative; box-shadow: 0 10px 30px rgba(0,0,0,0.5); max-height: 85vh; overflow-y: auto; }
+        .modal-close { position: absolute; top: 15px; right: 15px; font-size: 28px; cursor: pointer; color: var(--secondary-text-color); line-height: 1; transition: color 0.2s; }
+        .modal-close:hover { color: var(--text-color); }
+        .modal-content h3 { margin-top: 0; color: var(--text-color); margin-bottom: 5px; }
+
+        /* Outputs */
+        #download-section { display: none; flex-direction: column; gap: 15px; }
+        .status-message { background-color: var(--success-bg); border: 1px solid var(--success-color); border-radius: 6px; padding: 12px; color: var(--success-color); font-size: 14px; display: flex; align-items: center; gap: 8px; }
+        .download-btn { background-color: var(--success-bg); border: 1px solid var(--success-color); color: var(--success-color); text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 8px; border-radius: 6px; padding: 12px; font-weight: 600; transition: all 0.2s; }
+        .download-btn:hover { background-color: var(--success-color); color: #fff; }
+        
+        #preview-section { display: none; flex-direction: column; gap: 10px; }
+        .preview-header { color: var(--secondary-text-color); font-size: 12px; text-transform: uppercase; font-weight: 600; }
+        
+        #renderCanvas { width: 100%; border-radius: 6px; border: var(--border-width) solid var(--border-color); background: #000; display: none; aspect-ratio: 16/9; }
+        #final-video { width: 100%; border-radius: 6px; border: var(--border-width) solid var(--border-color); display: none; }
+
+        .site-footer { text-align: center; margin-top: 15px; font-size: 11px; color: var(--secondary-text-color); }
+        .privacy-link-btn { background: none; border: none; color: var(--secondary-text-color); cursor: pointer; text-decoration: underline; font-size: 12px; margin-bottom: 10px; font-family: inherit; }
+        .privacy-link-btn:hover { color: var(--text-color); }
+        
+        #logOutput { font-family: monospace; font-size: 11px; color: var(--main-accent); margin-top: 10px; display: none; text-align: center;}
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="top-bar">
+            <header>
+                <h2><img src="/iconaudio.png" alt="Icon"> Audio Visualizer</h2>
+                <p>Upload audio → choose style → download MP4</p>
+            </header>
+            
+            <div class="menu-wrapper">
+                <button id="menuBtn">☰</button>
+                <div id="themeDropdown" class="dropdown">
+                    <div class="dropdown-header">Themes</div>
+                    <button class="theme-btn" data-theme="system"><span class="theme-color-dot" style="background: #888;"></span>System</button>
+                    <button class="theme-btn" data-theme="high-contrast"><span class="theme-color-dot" style="background: #ffff00;"></span>High Contrast</button>
+                    <button class="theme-btn" data-theme="light"><span class="theme-color-dot" style="background: #0070f3;"></span>Light</button>
+                    <button class="theme-btn active" data-theme="dark"><span class="theme-color-dot" style="background: #00e0ff;"></span>Dark (Current)</button>
+                    <button class="theme-btn" data-theme="orange-light"><span class="theme-color-dot" style="background: #ff8a00;"></span>Orange Light</button>
+                    <button class="theme-btn" data-theme="orange-dark"><span class="theme-color-dot" style="background: #e65c00;"></span>Orange Dark</button>
+                    <button class="theme-btn" data-theme="green-light"><span class="theme-color-dot" style="background: #10b981;"></span>Green Light</button>
+                    <button class="theme-btn" data-theme="green-dark"><span class="theme-color-dot" style="background: #059669;"></span>Green Dark</button>
+                    <button class="theme-btn" data-theme="pastel"><span class="theme-color-dot" style="background: #f472b6;"></span>Pastel</button>
+                    <div class="dropdown-divider"></div>
+                    <div class="dropdown-header">Settings</div>
+                    <label class="toggle-row">
+                        <span>Text Outline (Stroke)</span>
+                        <input type="checkbox" id="textStrokeToggle">
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <form id="visForm">
+            <div id="drop-area">
+                <input type="file" id="file-input" accept="audio/*" required>
+                <div class="icon">🎧</div>
+                <p>Click or <strong>drag & drop</strong> audio file</p>
+                <p style="font-size: 11px; color: var(--secondary-text-color); margin-top: 5px;">MP3, WAV, FLAC, M4A — max 100 MB</p>
+                <div id="file-status"></div>
+            </div>
+
+            <div class="card">
+                <p class="section-label">
+                    WAVEFORM STYLE
+                    <button type="button" class="more-styles-btn" id="openModalBtn">Change Style...</button>
+                </p>
+                
+                <div id="current-style-display" class="style-tile selected" title="Click to change style">
+                    <svg viewBox="0 0 100 50" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M10 25 Q20 40 30 25 T50 25 T70 25 T90 25" />
+                    </svg>
+                    <p>Point-to-Point</p>
+                </div>
+            </div>
+
+            <div class="card">
+                <p class="section-label">VISUALIZER COLORS</p>
+                <div class="color-inputs">
+                    <label class="color-wrapper" for="waveColor">
+                        <input type="color" id="waveColor" value="#00e0ff">
+                        <span class="hex-code" id="waveColorHex" contenteditable="true">#00e0ff</span>
+                        <span class="color-label">Wave</span>
+                    </label>
+                    <label class="color-wrapper" for="bgColor">
+                        <input type="color" id="bgColor" value="#000000">
+                        <span class="hex-code" id="bgColorHex" contenteditable="true">#000000</span>
+                        <span class="color-label">Background</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="card">
+                <p class="section-label">ADVANCED SETTINGS</p>
+                
+                <div class="control-group">
+                    <label style="margin-bottom: 5px;">Background Image (Optional)</label>
+                    <input type="file" id="bgImageInput" accept="image/*">
+                </div>
+
+                <div class="slider-grid">
+                    <div class="control-group">
+                        <label>Glow <span id="glowVal">15</span></label>
+                        <input type="range" id="glowSlider" min="0" max="50" value="15">
+                    </div>
+                    <div class="control-group">
+                        <label>Thickness <span id="thickVal">0.6</span></label>
+                        <input type="range" id="thickSlider" min="0.1" max="1.5" step="0.1" value="0.6">
+                    </div>
+                    <div class="control-group">
+                        <label>Density / Bars <span id="freqVal">45</span></label>
+                        <input type="range" id="freqSlider" min="10" max="200" value="45">
+                    </div>
+                    <div class="control-group">
+                        <label>Amplitude (Height) <span id="ampVal">1.2x</span></label>
+                        <input type="range" id="ampSlider" min="0.1" max="3" step="0.1" value="1.2">
+                    </div>
+                    <div class="control-group">
+                        <label>Smoothness <span id="smoothVal">0.85</span></label>
+                        <input type="range" id="smoothSlider" min="0.1" max="0.99" step="0.01" value="0.85">
+                    </div>
+                    <div class="control-group">
+                        <label>Phase Shift <span id="phaseVal">0</span></label>
+                        <input type="range" id="phaseSlider" min="0" max="100" value="0">
+                    </div>
+                    <div class="control-group">
+                        <label>Resolution (W x H)</label>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <input type="number" id="resW" value="1920" placeholder="Width">
+                            <span style="color: var(--secondary-text-color);">x</span>
+                            <input type="number" id="resH" value="1080" placeholder="Height">
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label>Framerate (FPS)</label>
+                        <select id="fpsSelect">
+                            <option value="12">12</option>
+                            <option value="15">15</option>
+                            <option value="23.976">23.976</option>
+                            <option value="24">24</option>
+                            <option value="25">25</option>
+                            <option value="29.97">29.97</option>
+                            <option value="30">30</option>
+                            <option value="50">50</option>
+                            <option value="59.94">59.94</option>
+                            <option value="60" selected>60</option>
+                            <option value="120">120</option>
+                            <option value="240">240</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <button type="submit" id="generateBtn" class="primary-btn">
+                <span>▶</span> Render & Record Video
+            </button>
+            <div id="logOutput"></div>
+        </form>
+
+        <div id="download-section">
+            <div class="status-message"><span>✅</span> Done! Download your MP4 below.</div>
+            <a href="#" id="download-link" class="download-btn" download="visualizer.mp4"><span>⬇</span> Download Visualizer MP4</a>
+        </div>
+
+        <div id="preview-section">
+            <p class="preview-header" id="preview-title">PREVIEW</p>
+            <canvas id="renderCanvas"></canvas>
+            <video id="final-video" controls></video>
+        </div>
+        
+        <footer class="site-footer">
+            <button type="button" class="privacy-link-btn" id="openPrivacyBtn">Privacy Policy</button><br>
+            Powered by Web Audio API & FFmpeg.wasm &nbsp;·&nbsp; Runs 100% locally &nbsp;·&nbsp; v3.0.0
+        </footer>
+    </div>
+
+    <audio id="audioPlayback" style="display:none;"></audio>
+
+    <div id="styleModal" class="modal-overlay">
+        <div class="modal-content">
+            <span class="modal-close" id="closeModalBtn">&times;</span>
+            <h3>Select Waveform Style</h3>
+            <p style="color: var(--secondary-text-color); font-size: 14px; margin-bottom: 20px;">Choose a visualization technique for your video.</p>
+            
+            <div class="style-options" id="modal-styles">
+                <div class="style-tile" data-style="line">
+                    <svg viewBox="0 0 100 50" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 25 L15 35 L25 15 L35 40 L45 10 L55 35 L65 20 L75 45 L85 15 L95 25" /></svg>
+                    <p>Line</p>
+                </div>
+                
+                <div class="style-tile selected" data-style="p2p">
+                    <svg viewBox="0 0 100 50" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M10 25 Q20 40 30 25 T50 25 T70 25 T90 25" />
+                    </svg>
+                    <p>Point-to-Point</p>
+                </div>
+
+                <div class="style-tile" data-style="bars">
+                    <svg viewBox="0 0 100 50" stroke-width="4" stroke-linecap="round"><line x1="10" y1="22" x2="10" y2="28" /><line x1="20" y1="18" x2="20" y2="32" /><line x1="30" y1="10" x2="30" y2="40" /><line x1="40" y1="5"  x2="40" y2="45" /><line x1="50" y1="15" x2="50" y2="35" /><line x1="60" y1="5"  x2="60" y2="45" /><line x1="70" y1="12" x2="70" y2="38" /><line x1="80" y1="20" x2="80" y2="30" /><line x1="90" y1="23" x2="90" y2="27" /></svg>
+                    <p>Centered Bars</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="privacyModal" class="modal-overlay">
+        <div class="modal-content" style="text-align: left;">
+            <span class="modal-close" id="closePrivacyBtn">&times;</span>
+            <h3 style="margin-bottom: 5px;">🎵 Privacy Policy</h3>
+            <p style="font-size: 12px; color: var(--secondary-text-color);">Last updated: May 9, 2026</p>
+            <div style="font-size: 13px; line-height: 1.6; margin-top: 20px;">
+                <p>This Privacy Policy explains how <strong>Custom Audio Visualizer</strong> handles your data.</p>
+                <h4 style="margin-bottom: 5px; color: var(--text-color); margin-top: 15px;">1. Information We Do Not Collect</h4>
+                <p style="margin-top: 0; color: var(--secondary-text-color);">We do not require you to create an account and we do not ask for any personal information.</p>
+                <h4 style="margin-bottom: 5px; color: var(--text-color); margin-top: 15px;">2. Uploaded Audio Files (100% Local)</h4>
+                <p style="margin-top: 0; margin-bottom: 5px; color: var(--secondary-text-color);">When you select an audio file, it is processed <strong>entirely inside your own web browser</strong>. It is never uploaded to any cloud server.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 1. THEME ENGINE ---
+        const menuBtn = document.getElementById('menuBtn');
+        const themeDropdown = document.getElementById('themeDropdown');
+        const themeBtns = document.querySelectorAll('.theme-btn');
+
+        menuBtn.addEventListener('click', (e) => { e.stopPropagation(); themeDropdown.classList.toggle('show'); });
+        themeDropdown.addEventListener('click', (e) => { e.stopPropagation(); });
+        document.addEventListener('click', () => { themeDropdown.classList.remove('show'); });
+
+        function applyTheme(themeName) {
+            if (themeName === 'system') {
+                const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+            } else {
+                document.documentElement.setAttribute('data-theme', themeName);
+            }
+            localStorage.setItem('savedTheme', themeName);
+            themeBtns.forEach(btn => btn.classList.remove('active'));
+            const activeBtn = document.querySelector(`.theme-btn[data-theme="${themeName}"]`);
+            if(activeBtn) activeBtn.classList.add('active');
+        }
+
+        themeBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => { 
+                applyTheme(e.target.closest('.theme-btn').dataset.theme);
+                themeDropdown.classList.remove('show');
+            });
+        });
+        applyTheme(localStorage.getItem('savedTheme') || 'dark');
+
+        const textStrokeToggle = document.getElementById('textStrokeToggle');
+        const savedStrokePref = localStorage.getItem('textStrokeEnabled') === 'true';
+        textStrokeToggle.checked = savedStrokePref;
+        if(savedStrokePref) document.body.classList.add('text-stroke-active');
+        textStrokeToggle.addEventListener('change', (e) => {
+            const isEnabled = e.target.checked;
+            document.body.classList.toggle('text-stroke-active', isEnabled);
+            localStorage.setItem('textStrokeEnabled', isEnabled);
+        });
+
+        const openPrivacyBtn = document.getElementById('openPrivacyBtn');
+        const closePrivacyBtn = document.getElementById('closePrivacyBtn');
+        const privacyModal = document.getElementById('privacyModal');
+        openPrivacyBtn.addEventListener('click', () => privacyModal.classList.add('show'));
+        closePrivacyBtn.addEventListener('click', () => privacyModal.classList.remove('show'));
+        privacyModal.addEventListener('click', (e) => { if(e.target === privacyModal) privacyModal.classList.remove('show'); });
+
+        // --- 2. MODAL & STYLE LOGIC ---
+        const openModalBtn = document.getElementById('openModalBtn');
+        const closeModalBtn = document.getElementById('closeModalBtn');
+        const styleModal = document.getElementById('styleModal');
+        const modalStyleTiles = document.querySelectorAll('#modal-styles .style-tile');
+        const currentStyleDisplay = document.getElementById('current-style-display');
+        let selectedStyle = 'p2p'; // Default Style
+
+        openModalBtn.addEventListener('click', () => styleModal.classList.add('show'));
+        currentStyleDisplay.addEventListener('click', () => styleModal.classList.add('show'));
+        closeModalBtn.addEventListener('click', () => styleModal.classList.remove('show'));
+        styleModal.addEventListener('click', (e) => { if(e.target === styleModal) styleModal.classList.remove('show'); });
+
+        modalStyleTiles.forEach(tile => {
+            tile.addEventListener('click', function() {
+                modalStyleTiles.forEach(t => t.classList.remove('selected'));
+                this.classList.add('selected');
+                selectedStyle = this.dataset.style;
+                currentStyleDisplay.innerHTML = this.innerHTML;
+                setTimeout(() => styleModal.classList.remove('show'), 150);
+            });
+        });
+
+        // --- 3. DRAG & DROP AUDIO ---
+        // Retained exactly from turn 9 context for file handling.
+        const audioInput = document.getElementById('file-input');
+        const dropZone = document.getElementById('drop-area');
+        const statusDisplay = document.getElementById('file-status');
+
+        ;['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => { dropZone.addEventListener(eventName, e => { e.preventDefault(); e.stopPropagation(); }, false); });
+        dropZone.addEventListener('dragenter', () => dropZone.classList.add('hover'));
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('hover'));
+        dropZone.addEventListener('drop', e => { dropZone.classList.remove('hover'); handleAudioFiles(e.dataTransfer.files); });
+        dropZone.addEventListener('click', () => audioInput.click());
+        audioInput.addEventListener('change', function() { handleAudioFiles(this.files); });
+
+        function handleAudioFiles(files) {
+            if (files.length === 0) return;
+            const file = files[0];
+            if (!file.type.startsWith('audio/')) return alert('Please upload a valid audio file.');
+            statusDisplay.innerHTML = `✓ ${file.name} (${(file.size / (1024 * 1024)).toFixed(2)} MB)`;
+            statusDisplay.style.display = 'block';
+            if (files !== audioInput.files) audioInput.files = files;
+        }
+
+        // --- 4. ADVANCED UI CONTROLS ---
+        const waveColorPicker = document.getElementById('waveColor');
+        const waveColorHexDisplay = document.getElementById('waveColorHex');
+        const bgColorPicker = document.getElementById('bgColor');
+        const bgColorHexDisplay = document.getElementById('bgColorHex');
+
+        // Editable Hex Sync (added in previous turn)
+        function setupColorSync(picker, text) {
+            picker.addEventListener('input', () => text.innerText = picker.value);
+            text.addEventListener('blur', () => {
+                let val = text.innerText.trim();
+                if(!val.startsWith('#')) val = '#' + val;
+                if(/^#[0-9A-F]{6}$/i.test(val)) {
+                    picker.value = val; text.innerText = val;
+                } else {
+                    text.innerText = picker.value; // Revert if invalid
+                }
+            });
+            text.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') { e.preventDefault(); text.blur(); }
+            });
+        }
+        setupColorSync(waveColorPicker, waveColorHexDisplay);
+        setupColorSync(bgColorPicker, bgColorHexDisplay);
+
+        // Sliders value display updater (added in previous turn)
+        const advancedSliders = ['glow', 'thick', 'freq', 'amp', 'smooth', 'phase'];
+        advancedSliders.forEach(s => {
+            const input = document.getElementById(`${s}Slider`);
+            const display = document.getElementById(`${s}Val`);
+            input.addEventListener('input', () => { display.innerText = input.value + (s === 'amp' ? 'x' : ''); });
+        });
+
+        // Background Image Handler (added in previous turn)
+        let activeCustomBgImage = null;
+        document.getElementById('bgImageInput').addEventListener('change', function(e) {
+            if(e.target.files[0]) {
+                const url = URL.createObjectURL(e.target.files[0]);
+                activeCustomBgImage = new Image();
+                activeCustomBgImage.src = url;
+            }
+        });
+
+        // --- 5. UNIFIED CANVAS ENGINE ---
+        // Dropped FFmpeg filters, now all styles draw to Canvas for cross-style slider support.
+        const submissionForm = document.getElementById('visForm');
+        const executionBtn = document.getElementById('generateBtn');
+        const logFeed = document.getElementById('logOutput');
+        const compositorCanvas = document.getElementById('renderCanvas');
+        const finalizedVideoPlayer = document.getElementById('final-video');
+        const hiddenAudioPlayer = document.getElementById('audioPlayback');
+        const canvasCtx = compositorCanvas.getContext('2d');
+        
+        const { createFFmpeg, fetchFile } = FFmpeg;
+        const ffmpegInstance = createFFmpeg({ log: true });
+        
+        let webAudioCtx, audioAnalyser, audioSource, audioStreamDest, renderLoopId, mediaRecorder;
+        let videoDataChunks = [];
+
+        ffmpegInstance.setProgress(({ ratio }) => {
+            logFeed.innerText = `Encoding Final MP4: ${(ratio * 100).toFixed(1)}%`;
+        });
+
+        submissionForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (audioInput.files.length === 0) return alert('Upload audio first.');
+
+            executionBtn.disabled = true;
+            document.getElementById('download-section').style.display = 'none';
+            document.getElementById('preview-section').style.display = 'flex';
+            logFeed.style.display = 'block';
+
+            if (!ffmpegInstance.isLoaded()) {
+                executionBtn.innerHTML = `<span>⏳</span> Loading Video Engine...`;
+                logFeed.innerText = "Downloading WebAssembly core (~25MB, first time only)...";
+                await ffmpegInstance.load();
+            }
+
+            await initializeUnifiedRender();
+        });
+
+        async function initializeUnifiedRender() {
+            executionBtn.innerHTML = `<span>⏳</span> Live Rendering...`;
+            logFeed.innerText = "Setting up Live Render Canvas...";
+            
+            document.getElementById('preview-title').innerText = "🔴 LIVE RENDER IN PROGRESS... PLEASE WAIT";
+            document.getElementById('preview-title').style.color = "#ff4444";
+            compositorCanvas.style.display = 'block';
+            finalizedVideoPlayer.style.display = 'none';
+            videoDataChunks = [];
+
+            // Grab custom typeable resolutions and ensure they are valid even numbers for FFmpeg
+            let finalW = parseInt(document.getElementById('resW').value) || 1920;
+            let finalH = parseInt(document.getElementById('resH').value) || 1080;
+            if(finalW % 2 !== 0) finalW++; 
+            if(finalH % 2 !== 0) finalH++;
+            compositorCanvas.width = finalW;
+            compositorCanvas.height = finalH;
+
+            hiddenAudioPlayer.src = URL.createObjectURL(audioInput.files[0]);
+
+            // Setup Web Audio
+            if(!webAudioCtx) {
+                webAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                audioAnalyser = webAudioCtx.createAnalyser();
+                audioSource = webAudioCtx.createMediaElementSource(hiddenAudioPlayer);
+                audioStreamDest = webAudioCtx.createMediaStreamDestination();
+                audioSource.connect(audioAnalyser);
+                audioAnalyser.connect(webAudioCtx.destination);
+                audioSource.connect(audioStreamDest);
+            }
+            
+            // FFT size tuning based on domain
+            audioAnalyser.fftSize = selectedStyle === 'bars' ? 256 : 2048; 
+            await webAudioCtx.resume();
+
+            // Set Framerate from user-provided list
+            const targetedFpsString = document.getElementById('fpsSelect').value;
+            const targetedFpsFloat = parseFloat(targetedFpsString);
+
+            const compositorStream = new MediaStream([
+                ...compositorCanvas.captureStream(targetedFpsFloat).getVideoTracks(), 
+                ...audioStreamDest.stream.getAudioTracks()
+            ]);
+            
+            mediaRecorder = new MediaRecorder(compositorStream, { mimeType: 'video/webm;codecs=vp8,opus' });
+            mediaRecorder.ondataavailable = e => { if(e.data.size > 0) videoDataChunks.push(e.data); };
+
+            mediaRecorder.onstop = async () => {
+                cancelAnimationFrame(renderLoopId);
+                logFeed.innerText = "Rendering complete! Encoding high-quality MP4... (This takes a moment)";
+                
+                const rawWebmBlob = new Blob(videoDataChunks, { type: 'video/webm' });
+                ffmpegInstance.FS('writeFile', 'input.webm', await fetchFile(rawWebmBlob));
+                
+                await ffmpegInstance.run(
+                    '-i', 'input.webm', 
+                    '-c:v', 'libx264', // Codec swap for MP4 compatibility
+                    '-preset', 'ultrafast', 
+                    '-pix_fmt', 'yuv420p', 
+                    '-r', targetedFpsString, // Force FPS in metadata
+                    '-c:a', 'aac', 
+                    'final_visualizer.mp4'
+                );
+                
+                finalizeOutput(ffmpegInstance.FS('readFile', 'final_visualizer.mp4'));
+                try { ffmpegInstance.FS('unlink', 'input.webm'); ffmpegInstance.FS('unlink', 'final_visualizer.mp4'); } catch(e){}
+            };
+
+            hiddenAudioPlayer.play();
+            mediaRecorder.start();
+            logFeed.innerText = "Recording... Keep this tab open until the song ends.";
+            unifiedDrawLoop();
+        }
+
+        // Unified Drawing Loop connecting sliders to all styles
+        function unifiedDrawLoop() {
+            renderLoopId = requestAnimationFrame(unifiedDrawLoop);
+            
+            // Capture Slider State
+            audioAnalyser.smoothingTimeConstant = parseFloat(document.getElementById('smoothSlider').value);
+            const userDensity = parseInt(document.getElementById('freqSlider').value);
+            const userAmp = parseFloat(document.getElementById('ampSlider').value);
+            const userThickMod = parseFloat(document.getElementById('thickSlider').value);
+            const userGlow = parseInt(document.getElementById('glowSlider').value);
+            const userPhase = parseInt(document.getElementById('phaseSlider').value);
+
+            const w = compositorCanvas.width;
+            const h = compositorCanvas.height;
+
+            // Render Background layer
+            if (activeCustomBgImage) {
+                canvasCtx.drawImage(activeCustomBgImage, 0, 0, w, h);
+            } else {
+                canvasCtx.fillStyle = bgColorPicker.value;
+                canvasCtx.fillRect(0, 0, w, h);
+            }
+
+            // Setup Waveform Drawing Context
+            canvasCtx.lineCap = 'round';
+            canvasCtx.strokeStyle = waveColorPicker.value;
+            canvasCtx.fillStyle = waveColorPicker.value;
+            canvasCtx.shadowBlur = userGlow;
+            canvasCtx.shadowColor = waveColorPicker.value;
+
+            const nativeBufferLength = audioAnalyser.frequencyBinCount;
+            const audioDataArray = new Uint8Array(nativeBufferLength);
+
+            if (selectedStyle === 'bars') {
+                // Frequency domain rects
+                audioAnalyser.getByteFrequencyData(audioDataArray);
+
+                const finalBarWidth = (w / userDensity) * userThickMod; 
+                const barSpacing = (w / userDensity) * (1 - userThickMod);
+                const computedTotalWidth = (userDensity * finalBarWidth) + ((userDensity - 1) * barSpacing);
+                let currentX = (w - computedTotalWidth) / 2;
+                canvasCtx.lineWidth = finalBarWidth;
+
+                for (let i = 0; i < userDensity; i++) {
+                    let phaseShiftedIndex = Math.min(i + userPhase, nativeBufferLength - 1);
+                    let volumePercent = audioDataArray[phaseShiftedIndex] / 255;
+                    let calculatedBarHeight = (volumePercent * volumePercent) * (h / 2.2) * userAmp; 
+                    if (calculatedBarHeight < finalBarWidth / 2) calculatedBarHeight = finalBarWidth / 2; 
+
+                    const yAxisCenter = h / 2;
+                    canvasCtx.beginPath();
+                    canvasCtx.moveTo(currentX, yAxisCenter - calculatedBarHeight);
+                    canvasCtx.lineTo(currentX, yAxisCenter + calculatedBarHeight);
+                    canvasCtx.stroke();
+                    currentX += finalBarWidth + barSpacing;
+                }
+            } else {
+                // Time-Domain (Oscilloscope logic)
+                audioAnalyser.getByteTimeDomainData(audioDataArray);
+                canvasCtx.lineWidth = userThickMod * 5;
+
+                // Phase logic: shifts the sampling starting point in time-domain
+                let domainStartOffset = Math.floor((userPhase / 100) * (nativeBufferLength / 4));
+
+                if (selectedStyle === 'line') {
+                    // Standard jagged oscilloscope line
+                    canvasCtx.beginPath();
+                    let pixelSliceWidth = w * 1.0 / nativeBufferLength;
+                    let currentX = 0;
+                    for (let i = 0; i < nativeBufferLength; i++) {
+                        let sampleIndex = (i + domainStartOffset) % nativeBufferLength;
+                        let voltage = audioDataArray[sampleIndex] / 128.0; 
+                        let currentY = h / 2 + (voltage - 1) * (h / 2) * userAmp;
+                        if (i === 0) canvasCtx.moveTo(currentX, currentY);
+                        else canvasCtx.lineTo(currentX, currentY);
+                        currentX += pixelSliceWidth;
+                    }
+                    canvasCtx.stroke();
+                } else if (selectedStyle === 'p2p') {
+                    // --- SOLUTION Turn 11: Bezier Interpolation for Smoothed Wave ---
+                    // Natively supports thickness, amp, glow, and phase sliders.
+                    let targetPointsCount = userDensity * 2; 
+                    let pixelSliceWidth = w * 1.0 / targetPointsCount;
+                    let samplingStep = Math.floor(nativeBufferLength / targetPointsCount);
+
+                    // Collect control points
+                    let interpolationCoords = [];
+                    let xTracker = 0;
+                    for (let i = 0; i < targetPointsCount; i++) {
+                        let sampleIndex = (i * samplingStep + domainStartOffset) % nativeBufferLength;
+                        let voltage = audioDataArray[sampleIndex] / 128.0;
+                        let currentY = h / 2 + (voltage - 1) * (h / 2) * userAmp;
+                        interpolationCoords.push({ x: xTracker, y: currentY });
+                        xTracker += pixelSliceWidth;
+                    }
+
+                    // Draw Smooth Curve
+                    canvasCtx.beginPath();
+                    if (interpolationCoords.length > 0) {
+                        canvasCtx.moveTo(interpolationCoords[0].x, interpolationCoords[0].y);
+                        for (let i = 1; i < interpolationCoords.length - 1; i++) {
+                            // Quadratic Bezier interpolation for simple, performant smoothing between sampled points
+                            const controlPoint = interpolationCoords[i];
+                            const nextPoint = interpolationCoords[i+1];
+                            const xc = (controlPoint.x + nextPoint.x) / 2;
+                            const yc = (controlPoint.y + nextPoint.y) / 2;
+                            canvasCtx.quadraticCurveTo(controlPoint.x, controlPoint.y, xc, yc);
+                        }
+                        // Connect the final segment smoothly
+                        canvasCtx.lineTo(interpolationCoords[interpolationCoords.length - 1].x, interpolationCoords[interpolationCoords.length - 1].y);
+                    }
+                    canvasCtx.stroke(); // Draw the smooth wave
+                }
+            }
+        }
+
+        hiddenAudioPlayer.onended = () => {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop();
+        };
+
+        // --- 6. UI COMPLETION HANDLER ---
+        function finalizeOutput(finalMp4Data) {
+            const finalBlob = new Blob([finalMp4Data.buffer], { type: 'video/mp4' });
+            const finalUrl = URL.createObjectURL(finalBlob);
+
+            document.getElementById('preview-title').innerText = "FINAL VIDEO";
+            document.getElementById('preview-title').style.color = "var(--secondary-text-color)";
+            compositorCanvas.style.display = 'none';
+            finalizedVideoPlayer.style.display = 'block';
+            finalizedVideoPlayer.src = finalUrl;
+
+            document.getElementById('download-section').style.display = 'flex';
+            document.getElementById('download-link').href = finalUrl;
+            
+            executionBtn.innerHTML = `<span>▶</span> Render & Record Video`;
+            executionBtn.disabled = false;
+            logFeed.style.display = 'none';
+        }
+    </script>
+</body>
+</html>
